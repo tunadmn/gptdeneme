@@ -10,7 +10,7 @@ statsmodels==0.14.0
 xgboost==1.7.6
 optuna==3.3.0
 shap==0.42.1
-river==0.15.1
+river
 
 # NLP & Duygu Analizi
 transformers==4.33.3
