@@ -14,7 +14,7 @@ river
 
 # NLP & Duygu Analizi
 transformers
-torch
+torch>=2.6.0
 
 # Arayüz & Görselleştirme
 matplotlib
