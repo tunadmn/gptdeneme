@@ -59,7 +59,7 @@ class EconomicCalendar:
         df['importance_score'] = df['importance'].map(importance_map)
         
         # Risk formülü: (Önem * 3) + (Volatilite * 2) - (Süre * 0.5)
-        df['volatility_score'] = abs(df['change'].fillna(0) / 100  # % cinsinden değişim
+        df['volatility_score'] = abs(df['change'].fillna(0) / 100) # % cinsinden değişim
         df['time_score'] = df['hours_to_event'].apply(lambda x: max(0, 24 - x)/24  # 24 saat içindeki etkinlikler
         
         df['risk_score'] = (

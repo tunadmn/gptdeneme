@@ -2,7 +2,7 @@
 python-dotenv
 requests
 pandas
-numpy
+numpy==1.26.4
 
 # Veri İşleme & ML
 scikit-learn
