@@ -4,7 +4,7 @@ import pandas as pd
 import sqlite3
 from datetime import datetime, timedelta
 from config import API_KEYS
-from logger import Logger
+from .logger import Logger
 from typing import Dict, List
 
 class EconomicCalendar:

@@ -3,7 +3,7 @@ import tkinter as tk
 from tkinter import ttk
 from threading import Thread
 from queue import Queue
-from components import (
+from .components import (
     GrafikBileseni,
     HaberPaneli,
     APISayac,
@@ -14,7 +14,7 @@ from modules.data_fetcher import DataFetcher
 from modules.signal_generator import SignalGenerator
 from modules.risk_manager import RiskManager
 from modules.sentiment_analyzer import SentimentAnalyzer
-from logger import Logger
+from modules.logger import Logger
 
 class MainWindow(tk.Tk):
     def __init__(self, logger: Logger):

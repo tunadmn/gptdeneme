@@ -5,7 +5,7 @@ import sqlite3
 import numpy as np
 from datetime import datetime, timedelta
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, pipeline
-from logger import Logger
+from .logger import Logger
 from config import API_KEYS
 from typing import List, Dict
 

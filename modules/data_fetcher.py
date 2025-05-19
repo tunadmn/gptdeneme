@@ -5,7 +5,7 @@ import sqlite3
 import threading
 import time
 from config import API_KEYS
-from logger import Logger
+from .logger import Logger
 
 class DataFetcher:
     def __init__(self):

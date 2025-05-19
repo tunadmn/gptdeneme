@@ -5,10 +5,10 @@ from threading import Thread
 from queue import Queue
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from components import DarkTheme
+from .components import DarkTheme
 from modules.model_trainer import ModelTrainer
 from modules.online_learning import OnlineLearner
-from logger import Logger
+from modules.logger import Logger
 import pandas as pd
 
 class TrainingWindow(tk.Toplevel):

@@ -5,9 +5,9 @@ import sqlite3
 import logging
 from datetime import datetime, timedelta
 from statsmodels.tsa.stattools import adfuller
-from logger import Logger
-from modules.data_cleaner import DataCleaner
-from modules.model_trainer import ModelTrainer
+from .logger import Logger
+from .data_cleaner import DataCleaner
+from .model_trainer import ModelTrainer
 
 class SignalGenerator:
     def __init__(self, commodity: str, logger: Logger = None):

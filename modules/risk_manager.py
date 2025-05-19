@@ -3,9 +3,9 @@ import sqlite3
 import numpy as np
 import pandas as pd
 from typing import Optional, Tuple
-from logger import Logger
-from modules.sentiment_analyzer import SentimentAnalyzer
-from modules.economic_calendar import EconomicCalendar
+from .logger import Logger
+from .sentiment_analyzer import SentimentAnalyzer
+from .economic_calendar import EconomicCalendar
 
 class RiskManager:
     def __init__(self, commodity: str, logger: Logger = None):

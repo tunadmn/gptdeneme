@@ -5,7 +5,7 @@ import numpy as np
 import joblib
 from datetime import datetime, timedelta
 from river import compose, linear_model, preprocessing, drift
-from logger import Logger
+from .logger import Logger
 
 class OnlineLearner:
     def __init__(self, commodity: str, logger: Logger = None):

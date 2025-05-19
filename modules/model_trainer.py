@@ -8,7 +8,7 @@ import sqlite3
 import joblib
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import mean_squared_error, classification_report
-from logger import Logger
+from .logger import Logger
 
 class ModelTrainer:
     def __init__(self, commodity: str, logger: Logger = None):
