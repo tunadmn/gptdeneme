@@ -1,196 +1,200 @@
-# ui/main_window.py
 import tkinter as tk
-from tkinter import ttk
-from threading import Thread
-from queue import Queue
-from .components import (
-    GrafikBileseni,
-    HaberPaneli,
-    APISayac,
-    SinyalGostergesi,
-    DarkTheme
-)
+from tkinter import messagebox
+import threading
+import time
+
+# Projenizdeki diğer modülleri import edin
 from modules.data_fetcher import DataFetcher
 from modules.signal_generator import SignalGenerator
+from modules.online_learner import OnlineLearner
 from modules.risk_manager import RiskManager
 from modules.sentiment_analyzer import SentimentAnalyzer
-from modules.logger import Logger
+from modules.economic_calendar import EconomicCalendar
+
+# UI bileşenlerini import edin (eğer ayrı dosyalardaysalar)
+# from ui.api_counter_widget import APICounterWidget
+# from ui.graph_widget import GraphWidget
+# from ui.news_display_widget import NewsDisplayWidget
+# ... ve diğerleri
 
 class MainWindow(tk.Tk):
-    def __init__(self, logger: Logger):
+    def __init__(self, logger):
         super().__init__()
         self.logger = logger
-        self.fetcher = DataFetcher()
-        self.running = True
-        self.current_commodity = tk.StringVar()
-        self.data_queue = Queue()
-        
-        self.title("Borsa Asistan v1.0")
+        self.title("Quant Algo Trading Uygulaması")
         self.geometry("1200x800")
-        self.configure(bg=DarkTheme.BG)
-        self.protocol("WM_DELETE_WINDOW", self.on_close)
-        
+
+        # Uygulama kaynaklarını başlat
+        self.data_fetcher = DataFetcher(logger)
+        self.signal_generator = SignalGenerator(logger)
+        self.online_learner = OnlineLearner(logger)
+        self.risk_manager = RiskManager(logger)
+        self.sentiment_analyzer = SentimentAnalyzer(logger)
+        self.economic_calendar = EconomicCalendar(logger)
+
+        # API limit yapılandırmasını config.py'den alın
+        # self.api_limit_config = API_KEYS # Eğer config.py'de tanımlı ise
+
+        self.update_interval = 5000 # Millisaniye cinsinden güncelleme aralığı (örneğin 5 saniye)
+
+        # Pencere kapatma protokolünü ayarla
+        # Pencere kapatma düğmesine basıldığında on_closing metodunu çağırır
+        self.protocol("WM_DELETE_WINDOW", self.on_closing) # <-- BU SATIR EKLENDİ
+
+        # Kullanıcı arayüzünü başlat
         self.init_ui()
 
+        # İlk veri yüklemesini yap (bu GUI güncellemesi yapmamalıdır)
+        # Eğer varsa ve ilk veri yüklemesi yapılıyorsa bu metodu çağırın.
+        # self.load_initial_data() # Bu satır daha önce belirtildiği gibi sizde yoktu, bu yüzden yorumda bırakıldı.
+
+        # self.start_update_cycle() # <-- BU SATIR BURADAN KALDIRILDI ve main.py'de after() ile çağrılıyor
+        self.logger.info("MainWindow başarıyla başlatıldı ve UI hazır.", "MAIN_APP")
+
+
     def init_ui(self):
-        """Arayüz bileşenlerini oluştur ve yerleştir"""
-        # Üst Bilgi Çubuğu
-        header_frame = ttk.Frame(self)
-        header_frame.pack(fill=tk.X, padx=10, pady=5)
-        
-        # Emtia Seçimi
-        ttk.Label(header_frame, text="Emtia:").pack(side=tk.LEFT, padx=5)
-        self.combo = ttk.Combobox(
-            header_frame,
-            textvariable=self.current_commodity,
-            values=["BTCUSDT", "ETHUSDT", "XAUUSD", "EURUSD", "GBPUSD", "CL=F"],
-            state="readonly",
-            width=10
-        )
-        self.combo.pack(side=tk.LEFT, padx=5)
-        self.combo.current(0)
-        self.combo.bind("<<ComboboxSelected>>", self.on_commodity_change)
-        
-        # API Sayaçları
-        self.api_counters = {
-            'Binance': APISayac(header_frame, "Binance"),
-            'AlphaVantage': APISayac(header_frame, "AlphaVantage"),
-            'TwelveData': APISayac(header_frame, "12Data")
-        }
-        for counter in self.api_counters.values():
-            counter.pack(side=tk.LEFT, padx=15)
-        
-        # Ana İçerik Alanı
-        main_frame = ttk.Frame(self)
-        main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
-        
-        # Grafik Paneli
-        self.grafik = GrafikBileseni(main_frame)
-        self.grafik.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        
-        # Haber ve Sinyal Paneli
-        right_panel = ttk.Frame(main_frame)
-        right_panel.pack(side=tk.RIGHT, fill=tk.Y, padx=5)
-        
-        self.haber_paneli = HaberPaneli(right_panel)
-        self.haber_paneli.pack(fill=tk.X)
-        
-        # Sinyal ve Risk Göstergeleri
-        signal_frame = ttk.Frame(right_panel)
-        signal_frame.pack(pady=10)
-        
-        self.sinyal_gosterge = SinyalGostergesi(signal_frame)
-        self.sinyal_gosterge.pack(pady=5)
-        
-        self.risk_label = ttk.Label(
-            signal_frame,
-            text="Risk: Yüksek",
-            foreground=DarkTheme.WARNING
-        )
-        self.risk_label.pack()
-        
-        # Durum Çubuğu
-        self.status_bar = ttk.Label(
-            self, 
-            text="Bağlantı kuruluyor...",
-            anchor=tk.W
-        )
-        self.status_bar.pack(fill=tk.X, padx=10, pady=2)
+        """Kullanıcı arayüzü bileşenlerini başlatır ve yerleştirir."""
+        # Örnek bir layout:
+        # Ana Frame
+        main_frame = tk.Frame(self)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-    def on_commodity_change(self, event):
-        """Emtya değiştiğinde verileri yenile"""
-        Thread(target=self.load_initial_data, daemon=True).start()
+        # Üst Bölüm (API Sayaçları, Genel Durum)
+        top_frame = tk.Frame(main_frame, bd=2, relief="groove")
+        top_frame.pack(side=tk.TOP, fill=tk.X, pady=5)
 
-    def load_initial_data(self):
-        """Başlangıç verilerini yükle"""
-        commodity = self.current_commodity.get()
-        self.status_bar.config(text=f"{commodity} verileri yükleniyor...")
-        
-        try:
-            # Veri çek ve temizle
-            self.fetcher.parallel_fetch_all(commodity)
-            df = self.grafik.update_grafik(
-                self.get_historical_data(commodity),
-                f"{commodity} Canlı Grafik"
-            )
-            
-            # Haberleri yükle
-            analyzer = SentimentAnalyzer()
-            haberler = analyzer.fetch_financial_news(commodity)
-            self.haber_paneli.haber_ekle(haberler[:5])
-            
-            self.status_bar.config(text=f"{commodity} verileri güncel")
-            
-        except Exception as e:
-            self.logger.error(f"Veri yükleme hatası: {str(e)}", "MAIN_WINDOW")
+        # Örnek bir API Sayaçları widget'ı (placeholder)
+        self.api_counter_label = tk.Label(top_frame, text="API Çağrı Sayacı: Yükleniyor...")
+        self.api_counter_label.pack(side=tk.LEFT, padx=10, pady=5)
+        # self.api_counter_widget = APICounterWidget(top_frame, self.logger) # Eğer APICounterWidget varsa
+        # self.api_counter_widget.pack(side=tk.LEFT, padx=10, pady=5)
 
-    def get_historical_data(self, commodity):
-        """Temizlenmiş verileri getir"""
-        query = f"""
-            SELECT * FROM cleaned_data 
-            WHERE commodity='{commodity}'
-            ORDER BY timestamp DESC 
-            LIMIT 200
-        """
-        return pd.read_sql(query, self.fetcher.conn)
+
+        # Orta Bölüm (Canlı Grafik, Sinyal, Haberler)
+        middle_frame = tk.Frame(main_frame, bd=2, relief="groove")
+        middle_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True, pady=5)
+
+        # Canlı Grafik (placeholder)
+        self.graph_label = tk.Label(middle_frame, text="Canlı Grafik Alanı")
+        self.graph_label.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5)
+        # self.graph_widget = GraphWidget(middle_frame, self.logger) # Eğer GraphWidget varsa
+        # self.graph_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5)
+
+        # Sağ Panel (Sinyaller, Haberler, Risk)
+        right_panel = tk.Frame(middle_frame, width=300, bd=1, relief="solid")
+        right_panel.pack(side=tk.RIGHT, fill=tk.Y, padx=5, pady=5)
+
+        self.signal_label = tk.Label(right_panel, text="Sinyal Alanı")
+        self.signal_label.pack(fill=tk.X, pady=5)
+        # self.signal_widget = SignalWidget(right_panel, self.logger) # Eğer SignalWidget varsa
+        # self.signal_widget.pack(fill=tk.X, pady=5)
+
+        self.news_label = tk.Label(right_panel, text="Haber Akışı Alanı")
+        self.news_label.pack(fill=tk.X, pady=5)
+        # self.news_widget = NewsWidget(right_panel, self.logger) # Eğer NewsWidget varsa
+        # self.news_widget.pack(fill=tk.X, pady=5)
+
+        self.risk_label = tk.Label(right_panel, text="Risk Yönetimi Alanı")
+        self.risk_label.pack(fill=tk.X, pady=5)
+        # self.risk_widget = RiskWidget(right_panel, self.logger) # Eğer RiskWidget varsa
+        # self.risk_widget.pack(fill=tk.X, pady=5)
+
+        # Alt Bölüm (Durum Çubuğu, Loglar)
+        bottom_frame = tk.Frame(main_frame, bd=2, relief="groove")
+        bottom_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=5)
+
+        self.status_label = tk.Label(bottom_frame, text="Durum: Başlatıldı", bd=1, relief="sunken", anchor=tk.W)
+        self.status_label.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=10, pady=5)
+        # self.log_display_widget = LogDisplayWidget(bottom_frame, self.logger) # Eğer LogDisplayWidget varsa
+        # self.log_display_widget.pack(side=tk.RIGHT, padx=10, pady=5)
+
 
     def start_update_cycle(self):
-        """Gerçek zamanlı güncelleme döngüsünü başlat"""
-        def update_loop():
-            while self.running:
-                try:
-                    # API limitlerini güncelle
-                    self.api_counters['Binance'].update_sayac(
-                        1200 - self.fetcher.api_usage['binance']['remaining'],
-                        1200
-                    )
-                    self.api_counters['AlphaVantage'].update_sayac(
-                        500 - self.fetcher.api_usage['alphavantage']['remaining'],
-                        500
-                    )
-                    self.api_counters['TwelveData'].update_sayac(
-                        800 - self.fetcher.api_usage['twelvedata']['remaining'],
-                        800
-                    )
-                    
-                    # Sinyal üret
-                    generator = SignalGenerator(self.current_commodity.get())
-                    signal = generator.generate_signals()
-                    self.sinyal_gosterge.update_sinyal(signal.get('signal', 'Hold'))
-                    
-                    # Risk seviyesi
-                    risk = RiskManager(self.current_commodity.get()).calculate_total_risk(0.6, 1.5)
-                    self.update_risk(risk['risk_level'])
-                    
-                    # Her 60 saniyede bir veri güncelle
-                    self.after(60000, self.load_initial_data)
-                    
-                except Exception as e:
-                    self.logger.error(f"Güncelleme hatası: {str(e)}", "MAIN_WINDOW")
-        
-        Thread(target=update_loop, daemon=True).start()
+        """
+        GUI ve arka plan verilerini periyodik olarak güncelleyen döngüyü başlatır.
+        Bu metod, main.py'deki app.after() çağrısı ile mainloop başladıktan sonra çağrılmalıdır.
+        """
+        try:
+            self.logger.info("Güncelleme döngüsü başlatıldı.", "MAIN_APP")
+            self.update_api_counters()
+            self.update_live_graph()
+            self.update_news()
+            self.update_signal()
+            self.update_risk()
+            self.update_status("Uygulama çalışıyor...")
+        except Exception as e:
+            self.logger.error(f"Güncelleme döngüsünde hata: {e}", "MAIN_APP")
+            self.update_status(f"Hata: {e}")
+        finally:
+            # Belirlenen aralıkta kendini tekrar çağırmayı planla
+            self.after(self.update_interval, self.start_update_cycle)
 
-    def update_risk(self, risk_level: str):
-        """Risk göstergesini güncelle"""
-        colors = {
-            'High': DarkTheme.WARNING,
-            'Medium': '#f39c12',
-            'Low': DarkTheme.ACCENT
-        }
-        self.risk_label.config(
-            text=f"Risk: {risk_level}",
-            foreground=colors.get(risk_level, DarkTheme.FG)
-        )
+    def update_status(self, message: str):
+        """Durum çubuğunu günceller."""
+        self.status_label.config(text=f"Durum: {message}")
 
-    def on_close(self):
-        """Pencere kapanırken kaynakları temizle"""
-        self.running = False
-        self.fetcher.conn.close()
-        self.destroy()
+    def update_api_counters(self):
+        """API çağrı sayaçlarını günceller."""
+        try:
+            # api_counters = self.data_fetcher.get_api_counters() # Veri çekici modülünden API sayaçlarını al
+            # self.api_counter_widget.update_counters(api_counters) # Widget'ı güncelle
+            self.api_counter_label.config(text=f"API Çağrı Sayacı: {time.time()}") # Geçici güncelleme
+            self.logger.debug("API sayaçları güncellendi.", "API_MONITOR")
+        except Exception as e:
+            self.logger.error(f"API sayaçları güncellenirken hata: {e}", "API_MONITOR")
 
-# Örnek Kullanım
-if __name__ == "__main__":
-    logger = Logger(log_file='logs/app_log.json')
-    app = MainWindow(logger)
-    app.after(10, app.start_update_cycle)
-    app.mainloop()
+    def update_live_graph(self):
+        """Canlı grafik verilerini günceller."""
+        try:
+            # graph_data = self.data_fetcher.get_live_graph_data() # Canlı grafik verilerini al
+            # self.graph_widget.update_graph(graph_data) # Grafik widget'ını güncelle
+            self.graph_label.config(text=f"Canlı Grafik Alanı: {time.time()}") # Geçici güncelleme
+            self.logger.debug("Canlı grafik güncellendi.", "GRAPH_UPDATE")
+        except Exception as e:
+            self.logger.error(f"Canlı grafik güncellenirken hata: {e}", "GRAPH_UPDATE")
+
+    def update_news(self):
+        """Haber akışını günceller."""
+        try:
+            # news_items = self.sentiment_analyzer.get_latest_news() # En son haberleri al
+            # self.news_widget.display_news(news_items) # Haber widget'ını güncelle
+            self.news_label.config(text=f"Haber Akışı Alanı: {time.time()}") # Geçici güncelleme
+            self.logger.debug("Haber akışı güncellendi.", "NEWS_FETCHER")
+        except Exception as e:
+            self.logger.error(f"Haber akışı güncellenirken hata: {e}", "NEWS_FETCHER")
+
+    def update_signal(self):
+        """Ticaret sinyallerini günceller."""
+        try:
+            # signal = self.signal_generator.generate_signal() # Sinyal oluştur
+            # self.signal_widget.display_signal(signal) # Sinyal widget'ını güncelle
+            self.signal_label.config(text=f"Sinyal Alanı: {time.time()}") # Geçici güncelleme
+            self.logger.debug("Ticaret sinyali güncellendi.", "SIGNAL_GEN")
+        except Exception as e:
+            self.logger.error(f"Ticaret sinyali güncellenirken hata: {e}", "SIGNAL_GEN")
+
+    def update_risk(self):
+        """Risk yönetimi göstergelerini günceller."""
+        try:
+            # risk_status = self.risk_manager.get_current_risk_status() # Mevcut risk durumunu al
+            # self.risk_widget.display_risk_status(risk_status) # Risk widget'ını güncelle
+            self.risk_label.config(text=f"Risk Yönetimi Alanı: {time.time()}") # Geçici güncelleme
+            self.logger.debug("Risk yönetimi güncellendi.", "RISK_MANAGER")
+        except Exception as e:
+            self.logger.error(f"Risk yönetimi güncellenirken hata: {e}", "RISK_MANAGER")
+
+    def on_closing(self):
+        """
+        Uygulama penceresi kapatıldığında çağrılır.
+        Logger'ı ve diğer kaynakları düzgün bir şekilde temizler.
+        """
+        self.logger.info("Uygulama penceresi kapatma isteği alındı, kaynaklar temizleniyor.", "MAIN_APP")
+        # Logger'ın tüm handler'larını temizle ve kapat
+        self.logger.shutdown() # <-- LOGGER SHUTDOWN BURADA ÇAĞRILIR
+        self.destroy() # Tkinter penceresini yok et
+
+
+# Not: APICounterWidget, GraphWidget vb. gibi özel widget'ları
+# henüz tanımlanmadıysa, bunları kendi dosyalarında oluşturmanız veya
+# bu dosya içinde basit placeholder'lar olarak tanımlamanız gerekir.
+# Şu an için basit Label'lar kullanıldı.

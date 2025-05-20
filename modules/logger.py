@@ -50,7 +50,7 @@ class Logger:
         with self.lock: # Aynı anda yalnızca bir iş parçacığının log yazmasını sağla
             try:
                 # Standart Python günlükleme metodunu çağır.
-                # 'message' ve 'level' standart argümanlar olarak geçirilir.
+                # 'message' mesaj olarak, 'level' günlükleme seviyesi olarak geçirilir.
                 # 'extra' sözlüğü, LogRecord'a eklenecek özel nitelikleri içerir.
                 self.logger.log(getattr(logging, level.upper()), message, extra=log_record_extra)
                 self._check_for_alert(log_record_extra) # Uyarı kontrolü yap
@@ -71,6 +71,18 @@ class Logger:
 
     def critical(self, message: str, module: str, extra: Optional[Dict] = None) -> None:
         self.log('CRITICAL', message, module, extra)
+
+    def shutdown(self):
+        """
+        Tüm logger handler'larını temizler ve kapatır.
+        Uygulama düzgün bir şekilde kapatıldığında çağrılmalıdır.
+        """
+        self.logger.info("Günlükleme sistemi kapatılıyor ve dosyalar temizleniyor.", "LOGGER_SHUTDOWN")
+        for handler in self.logger.handlers[:]: # Liste üzerinde dönerken değiştirmemek için kopyasını kullan
+            handler.flush() # Tamponlanmış tüm logları diske yaz
+            handler.close() # Handler'ı kapat
+            self.logger.removeHandler(handler) # Logger'dan handler'ı kaldır
+        self.logger.handlers = [] # Handler listesini temizle
 
     def _check_for_alert(self, log_data: Dict) -> None:
         """
