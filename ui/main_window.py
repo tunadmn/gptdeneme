@@ -6,7 +6,7 @@ import time
 # Projenizdeki diğer modülleri import edin
 from modules.data_fetcher import DataFetcher
 from modules.signal_generator import SignalGenerator
-from modules.online_learner import OnlineLearner
+from modules.online_learning import OnlineLearner
 from modules.risk_manager import RiskManager
 from modules.sentiment_analyzer import SentimentAnalyzer
 from modules.economic_calendar import EconomicCalendar
