@@ -19,14 +19,18 @@ API_KEYS: Dict[str, str] = {
     'financialmodelingprep': get_env('FMP_API_KEY', '')
 }
 
+# DATABASE_PATH ve LOG_PATH'ı doğrudan import edilebilir hale getiriyoruz
+DATABASE_PATH: str = get_env('DATABASE_PATH', os.path.join('data', 'database.db')) # <-- BU SATIR EKLENDİ/DEĞİŞTİRİLDİ
+LOG_PATH: str = get_env('LOG_FILE', os.path.join('logs', 'app_log.json')) # <-- BU SATIR EKLENDİ/DEĞİŞTİRİLDİ
+
 # Genel Ayarlar
 GENERAL_SETTINGS: Dict[str, Any] = {
     'timezone': get_env('TIMEZONE', 'Europe/Istanbul'),
-    'database_path': get_env('DATABASE_PATH', os.path.join('data', 'database.db')),
+    'database_path': DATABASE_PATH, # <-- Artık yukarıda tanımlanan DATABASE_PATH'ı kullanıyoruz
     'log_settings': {
         'max_log_size': get_env('LOG_MAX_SIZE', 10_485_760, int),
         'backup_count': get_env('LOG_BACKUP_COUNT', 3, int),
-        'log_file': get_env('LOG_FILE', os.path.join('logs', 'app_log.json'))
+        'log_file': LOG_PATH # <-- Artık yukarıda tanımlanan LOG_PATH'ı kullanıyoruz
     }
 }
 
