@@ -31,7 +31,6 @@ class MainWindow(tk.Tk):
         self.protocol("WM_DELETE_WINDOW", self.on_close)
         
         self.init_ui()
-        self.start_update_cycle()
 
     def init_ui(self):
         """Arayüz bileşenlerini oluştur ve yerleştir"""
@@ -193,4 +192,5 @@ class MainWindow(tk.Tk):
 if __name__ == "__main__":
     logger = Logger(log_file='logs/app_log.json')
     app = MainWindow(logger)
+    app.after(10, app.start_update_cycle)
     app.mainloop()
