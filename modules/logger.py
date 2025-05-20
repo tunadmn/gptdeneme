@@ -1,108 +1,110 @@
-# modules/logger.py
-import json
 import logging
-import traceback
+import json
 from datetime import datetime
 import threading
-from typing import Optional, Dict, Any
+from typing import Dict, Optional
 
 class Logger:
-    def __init__(self, log_file: str = 'logs/app_log.json', alert_threshold: str = 'CRITICAL'):
+    """
+    Uygulama genelinde standartlaştırılmış ve JSON formatında loglama sağlayan sınıf.
+    """
+    def __init__(self, log_file: str = 'app_log.json'):
         self.log_file = log_file
-        self.alert_threshold = alert_threshold
-        self.lock = threading.Lock()
+        self.lock = threading.Lock() # Günlük yazma sırasında eşzamanlı erişimi yönetmek için kilit
+        self.logger = logging.getLogger('TradingAppLogger')
+        self.logger.setLevel(logging.INFO) # Varsayılan log seviyesi INFO
+
+        # Logger'a handler'ların yalnızca bir kez eklenmesini sağlar
         self._setup_logger()
 
-    def _setup_logger(self) -> None:
-        """JSON formatter ile temel logger konfigürasyonu"""
-        self.logger = logging.getLogger('borsasistan')
-        self.logger.setLevel(logging.DEBUG)
-        
-        # JSON File Handler
-        file_handler = logging.FileHandler(self.log_file)
-        file_handler.setFormatter(JSONFormatter())
-        self.logger.addHandler(file_handler)
+    def _setup_logger(self):
+        # Logger'a handler'ların zaten eklenip eklenmediğini kontrol et
+        if not self.logger.handlers:
+            # Dosya handler'ı: Logları belirtilen dosyaya yazar
+            file_handler = logging.FileHandler(self.log_file)
+            file_handler.setFormatter(JSONFormatter()) # Özel JSON formatlayıcıyı kullan
+            self.logger.addHandler(file_handler)
+
+            # İsteğe bağlı: Konsol çıktısı için StreamHandler (geliştirme sırasında faydalıdır)
+            stream_handler = logging.StreamHandler()
+            stream_handler.setFormatter(logging.Formatter('%(levelname)s: %(message)s'))
+            self.logger.addHandler(stream_handler)
 
     def log(self, level: str, message: str, module: str, extra: Optional[Dict] = None) -> None:
-        """Özelleştirilmiş JSON log kaydı"""
-        log_data = {
-            'timestamp': datetime.utcnow().isoformat(),
-            'level': level.upper(),
-            'module': module,
-            'message': message,
-            **({'extra': extra} if extra else {})
-        }
-        
-        with self.lock:
+        """
+        Özelleştirilmiş JSON log kaydı oluşturur.
+
+        Args:
+            level (str): Log seviyesi (örn: 'INFO', 'WARNING', 'ERROR', 'CRITICAL').
+            message (str): Log mesajı.
+            module (str): Logu oluşturan özel modül adı (örn: 'DATA_FETCHER', 'RISK_MANAGER').
+            extra (Optional[Dict]): Log kaydına eklenecek ek anahtar-değer çiftleri.
+        """
+        # LogRecord'a eklenecek özel nitelikler için bir sözlük oluştur.
+        # Standart 'module' niteliğiyle çakışmayı önlemek için benzersiz bir anahtar kullanıyoruz.
+        log_record_extra = {'custom_module_name': module}
+
+        if extra:
+            log_record_extra.update(extra) # Çağıran tarafından sağlanan diğer 'extra' verilerini birleştir
+
+        with self.lock: # Aynı anda yalnızca bir iş parçacığının log yazmasını sağla
             try:
-                self.logger.log(getattr(logging, level.upper()), message, extra=log_data)
-                self._check_for_alert(log_data)
+                # Standart Python günlükleme metodunu çağır.
+                # 'message' ve 'level' standart argümanlar olarak geçirilir.
+                # 'extra' sözlüğü, LogRecord'a eklenecek özel nitelikleri içerir.
+                self.logger.log(getattr(logging, level.upper()), message, extra=log_record_extra)
+                self._check_for_alert(log_record_extra) # Uyarı kontrolü yap
             except Exception as e:
-                print(f"Logging failed: {str(e)}")
+                print(f"Logging failed: {str(e)}") # Günlükleme hatasını konsola yaz
 
-    def _check_for_alert(self, log_data: Dict[str, Any]) -> None:
-        """Kritik hata durumunda alert tetikle"""
-        if log_data['level'] == self.alert_threshold:
-            self.trigger_alert(log_data)
+    def debug(self, message: str, module: str, extra: Optional[Dict] = None) -> None:
+        self.log('DEBUG', message, module, extra)
 
-    def trigger_alert(self, alert_data: Dict[str, Any]) -> None:
-        """UI için alert mesajı üret (UI modülü bu methodu override edecek)"""
-        # Base class'ta sadece konsola yazdır
-        print(f"! ALERT ! [{alert_data['level']}] {alert_data['message']}")
+    def info(self, message: str, module: str, extra: Optional[Dict] = None) -> None:
+        self.log('INFO', message, module, extra)
 
-    def exception_handler(self, exception: Exception, module: str) -> None:
-        """Exception logging için optimize edilmiş method"""
-        tb = traceback.extract_tb(exception.__traceback__)
-        self.log('ERROR', 
-                f"{type(exception).__name__}: {str(exception)}",
-                module,
-                extra={
-                    'traceback': [{
-                        'file': frame.filename,
-                        'line': frame.lineno,
-                        'function': frame.name
-                    } for frame in tb]
-                })
+    def warning(self, message: str, module: str, extra: Optional[Dict] = None) -> None:
+        self.log('WARNING', message, module, extra)
 
-    # Kolay erişim için kısa metodlar
-    def info(self, message: str, module: str) -> None:
-        self.log('INFO', message, module)
+    def error(self, message: str, module: str, extra: Optional[Dict] = None) -> None:
+        self.log('ERROR', message, module, extra)
 
-    def warning(self, message: str, module: str) -> None:
-        self.log('WARNING', message, module)
+    def critical(self, message: str, module: str, extra: Optional[Dict] = None) -> None:
+        self.log('CRITICAL', message, module, extra)
 
-    def error(self, message: str, module: str) -> None:
-        self.log('ERROR', message, module)
-
-    def critical(self, message: str, module: str) -> None:
-        self.log('CRITICAL', message, module)
+    def _check_for_alert(self, log_data: Dict) -> None:
+        """
+        Belirli log verilerine göre uyarı tetikleme mantığı.
+        Bu metodun içi uygulamanızın gereksinimlerine göre doldurulacaktır.
+        """
+        # Örneğin:
+        # if log_data.get('level') == 'CRITICAL':
+        #     # Bir bildirim gönderme veya başka bir uyarı mekanizması tetikleme
+        #     print(f"CRITICAL UYARI: {log_data.get('message')}")
+        pass # Şu an için boş bırakıldı
 
 class JSONFormatter(logging.Formatter):
-    """Custom JSON log formatter"""
+    """
+    Log kayıtlarını JSON formatına dönüştüren özel formatlayıcı.
+    """
     def format(self, record: logging.LogRecord) -> str:
+        # Log verisi sözlüğünü JSON çıktısı için oluştur
         log_data = {
-            'timestamp': datetime.utcnow().isoformat(),
-            'level': record.levelname,
-            'module': record.module,
-            'message': record.getMessage(),
-            **getattr(record, 'extra', {})
+            'timestamp': datetime.fromtimestamp(record.created).isoformat(), # LogRecord'dan standart zaman damgası
+            'level': record.levelname, # LogRecord'dan standart seviye adı
+            # Özel modül adımızı tercih et, yoksa standart record.module'u (log çağrısının yapıldığı modül) kullan
+            'module': getattr(record, 'custom_module_name', record.module),
+            'message': record.getMessage(), # LogRecord'dan standart mesaj
         }
-        
-        if record.exc_info:
-            log_data['exception'] = self.formatException(record.exc_info)
-            
-        return json.dumps(log_data, ensure_ascii=False)
 
-# Örnek kullanım
-if __name__ == "__main__":
-    logger = Logger(log_file='logs/test_log.json')
-    
-    logger.info("Uygulama başlatıldı", "TEST")
-    logger.warning("API limiti yaklaşıyor", "DATA_FETCHER")
-    
-    try:
-        1 / 0
-    except Exception as e:
-        logger.exception_handler(e, "LOGGER_TEST")
-    
-    logger.critical("Kritik sistem hatası!", "CORE")
+        # Log metodunda 'extra' dict aracılığıyla geçirilen diğer özel nitelikleri ekle
+        # Bu nitelikler LogRecord objesinin doğrudan nitelikleri haline gelir.
+        for key, value in record.__dict__.items():
+            # Standart LogRecord niteliklerini ve bizim zaten işlediğimiz 'custom_module_name'i dışarıda bırak
+            # Ayrıca içsel/özel Python niteliklerini (alt çizgi ile başlayanlar) de dışarıda bırak
+            if key not in ['name', 'levelname', 'pathname', 'filename', 'lineno', 'funcName', 'created',
+                           'asctime', 'msecs', 'relativeCreated', 'thread', 'threadName', 'processName', 'process',
+                           'exc_info', 'exc_text', 'stack_info', 'msg', 'args', 'module', 'custom_module_name'] and not key.startswith('_'):
+                log_data[key] = value
+
+        return json.dumps(log_data, ensure_ascii=False) # JSON formatında döndür
